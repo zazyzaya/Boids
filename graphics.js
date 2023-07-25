@@ -1,6 +1,6 @@
-const W = window.innerWidth - 100;
-const H = window.innerHeight - 100 ;
-const n = 100; 
+const W = window.innerWidth;
+const H = window.innerHeight;
+const n = 1000; 
 
 function animate(ctx, boids) {
     boids.update();
@@ -13,7 +13,7 @@ function init() {
     ctx.canvas.width = W; 
     ctx.canvas.height = H; 
 
-    const boids = new BoidManager(400, W, H); 
+    const boids = new BoidManager(n, W, H); 
     boids.draw(ctx); 
     animate(ctx, boids);  
 }

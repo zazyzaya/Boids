@@ -199,7 +199,6 @@ class BoidManager{
 
             main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * (1/dist) * this.mouse_force;
             main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * (1/dist) * this.mouse_force; 
-                
         }
     }
 }
