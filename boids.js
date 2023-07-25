@@ -78,7 +78,7 @@ class BoidManager{
             r1_force=0.0005, 
             r2_dist=10, r2_force=1, 
             r3_force=0.1,
-            mouse_force=0.25
+            mouse_force=0.1
         ) {
 
         this.w = w; 
@@ -114,7 +114,7 @@ class BoidManager{
         
         // Draw mouse 
         ctx.beginPath();
-        ctx.arc(this.obstacle[0], this.obstacle[1], this.obj_size, 0, 2 * Math.PI);
+        ctx.arc(MOUSE_X, MOUSE_Y, this.obj_size, 0, 2 * Math.PI);
         ctx.stroke();
     }
 
@@ -132,31 +132,10 @@ class BoidManager{
         // Boids fly to center of mass of all (neighboring) boids
         // For now, let all boids be neighbors of all other boids
         let cx = 0; let cy = 0;
-        let tru_cx = 0; let tru_cy = 0; 
         this.boids.map( (other) => { 
-            let otherx = other.s[0];
-            if (otherx < this.w / 2) { otherx += this.w}
-            let othery = other.s[1];
-            if (othery < this.h / 2) { othery += this.h}
-            
             cx += other.s[0]; 
             cy += other.s[1];  
-            tru_cx += otherx; 
-            tru_cy += othery
         }); 
-
-        // Obstacle chases them around
-        let dx = scalar_wrapped_distance(this.obstacle[0], cx/this.n, this.w); 
-        let dy = scalar_wrapped_distance(this.obstacle[1], cy/this.n, this.h); 
-
-        this.obstacle_v = normalize([dx,dy])
-        this.obstacle[0] += 3*this.obstacle_v[0]; 
-        this.obstacle[1] += 3*this.obstacle_v[1]; 
-
-        if (this.obstacle[0] < 0) { this.obstacle[0] = this.w + this.obstacle[0] }
-        if (this.obstacle[1] < 0) { this.obstacle[1] = this.h + this.obstacle[0] }
-        if (this.obstacle[0] > this.w) { this.obstacle[0] = this.obstacle[0] - this.w }
-        if (this.obstacle[1] > this.h) { this.obstacle[1] = this.obstacle[1] - this.h }
 
         for (let i=0; i<this.boids.length; i++) {
             let boid = this.boids[i]
@@ -216,10 +195,10 @@ class BoidManager{
         // Repell birds from mouse
         for (let i=0; i<this.boids.length; i++) {
             let main_b = this.boids[i];     
-            let dist = wrapped_distance(main_b.s, this.obstacle, this.w, this.h); 
+            let dist = wrapped_distance(main_b.s, [MOUSE_X, MOUSE_Y], this.w, this.h); 
 
-            main_b.a[0] += scalar_wrapped_distance(this.obstacle[0], main_b.s[0], this.w) * (1/dist) * this.mouse_force;
-            main_b.a[1] += scalar_wrapped_distance(this.obstacle[1], main_b.s[1], this.h) * (1/dist) * this.mouse_force; 
+            main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * (1/dist) * this.mouse_force;
+            main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * (1/dist) * this.mouse_force; 
                 
         }
     }
