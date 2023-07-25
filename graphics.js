@@ -7,12 +7,19 @@ function set_size(canvas_id) {
     document.getElementById(canvas_id).setAttribute('height', H);
 }
 
+function animate(ctx, boids) {
+    boids.update();
+    boids.draw(ctx); 
+    window.requestAnimationFrame( () => animate(ctx, boids) ); 
+}
+
 function init() {
     set_size("bird-canvas"); 
 
-    const boids = new BoidFactory(100, W, H); 
     const ctx = document.getElementById("bird-canvas").getContext("2d");
+    const boids = new BoidFactory(100, W, H, ctx); 
     boids.draw(ctx); 
+    animate(ctx, boids);  
 }
 
 init(); 
