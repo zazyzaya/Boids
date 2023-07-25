@@ -1,0 +1,22 @@
+body { 
+    color: rgb(226, 226, 226); 
+    background-color: rgb(252, 240, 230); 
+}
+
+#everything {
+    width: 100%; 
+    height: 100%;
+}
+
+#canvas-container {
+    position: relative; 
+    width: 100%;
+    height: 500px; 
+}
+
+canvas {
+    position: absolute;
+    left: 0;
+    top: 0; 
+    border: 1px solid #373737;
+}
