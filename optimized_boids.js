@@ -1,3 +1,6 @@
+const BOID_HEIGHT = 10; 
+const BOID_WIDTH = 2; 
+
 function magnitude(vec) {
     return Math.sqrt(vec[0]*vec[0] + vec[1]*vec[1]); 
 }
@@ -20,7 +23,7 @@ let handleMousemove = (event) => {
 }
 document.addEventListener('mousemove', handleMousemove);
 
-let chase = true 
+let chase = false
 let handleMouseClick = (event) => {
     chase = !chase; 
 }
@@ -73,17 +76,13 @@ function generateColor() {
     return finalHexString;
   }
 
-
-const BOID_HEIGHT = 10; 
-const BOID_WIDTH = 3; 
-
 class BoidManager{
     constructor(
             n, w,h, 
             max_speed=3,
-            r1_force=0.005, 
+            r1_force=0.1, 
             r2_dist=5, r2_force=1, 
-            r3_force=0.1,
+            r3_force=0.01,
             mouse_force=1,
             fov=100
         ) {
@@ -92,6 +91,7 @@ class BoidManager{
         this.h = h; 
         this.max_speed = max_speed;
         this.fov = fov; 
+        this.first = true; 
 
         this.boids = []
         for (let i=0; i<n; i++) {
@@ -133,7 +133,7 @@ class BoidManager{
         this.boids.map( (boid) => boid.update() );
 
         this.rules(); 
-        if (chase) {this.avoid();} 
+        if (chase) {this.avoid(); } 
     }
 
     rules() {
@@ -178,13 +178,15 @@ class BoidManager{
                 }
             }
              // Apply rules 1 and 3 now that we have global data
-            // R1: 
-            b1.a[0] += scalar_wrapped_distance(b1.s[0], b1.cs[0] / b1.n, this.w) * this.r1_force; 
-            b1.a[1] += scalar_wrapped_distance(b1.s[1], b1.cs[1] / b1.n, this.h) * this.r1_force; 
+            if (b1.n) {
+                // R1: 
+                b1.a[0] += scalar_wrapped_distance(b1.s[0], b1.cs[0] / b1.n, this.w) * this.r1_force; 
+                b1.a[1] += scalar_wrapped_distance(b1.s[1], b1.cs[1] / b1.n, this.h) * this.r1_force; 
 
-            // R3: 
-            b1.a[0] += -(b1.v[0] - b1.cv[0] / b1.n) * this.r3_force; 
-            b1.a[1] += -(b1.v[1] - b1.cv[0] / b1.n) * this.r3_force;
+                // R3: 
+                b1.a[0] += -(b1.v[0] - b1.cv[0] / b1.n) * this.r3_force; 
+                b1.a[1] += -(b1.v[1] - b1.cv[0] / b1.n) * this.r3_force;
+            }
         }
         //this.r2(); 
     }
@@ -215,8 +217,8 @@ class BoidManager{
             let main_b = this.boids[i];     
             let dist = wrapped_distance(main_b.s, [MOUSE_X, MOUSE_Y], this.w, this.h); 
 
-            main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * (1/dist) * this.mouse_force;
-            main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * (1/dist) * this.mouse_force; 
+            main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * (this.fov/dist) * this.mouse_force;
+            main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * (this.fov/dist) * this.mouse_force; 
         }
     }
 }
@@ -229,8 +231,8 @@ class Boid {
         // Physics
         this.s = [Math.random() * w, Math.random() * h]; 
         this.v = [
-            2*(max_speed*Math.random())-max_speed, 
-            2*(max_speed*Math.random())-max_speed
+            2*(max_speed*2*Math.random()), 
+            2*(max_speed*2*Math.random())-max_speed
         ]; 
 
         // Neighbor info
@@ -288,11 +290,11 @@ class Boid {
         let y = this.s[1] + this.v[1]; 
         
         // Loop around if need be 
-        if (x > this.w) { x = x - this.w; }
-        if (y > this.h) { y = y - this.h; }
+        while (x > this.w) { x = x - this.w; }
+        while (y > this.h) { y = y - this.h; }
 
-        if (x < 0) { x=this.w + x; }
-        if (y < 0) { y=this.h + y; }
+        while (x < 0) { x=this.w + x; }
+        while (y < 0) { y=this.h + y; }
         
         this.s = [x,y]
     }

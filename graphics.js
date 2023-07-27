@@ -1,6 +1,6 @@
 const W = window.innerWidth;
 const H = window.innerHeight;
-const n = 1000; 
+const n = 1; 
 
 function animate(ctx, boids) {
     boids.update();
