@@ -20,6 +20,12 @@ let handleMousemove = (event) => {
 }
 document.addEventListener('mousemove', handleMousemove);
 
+let chase = true 
+let handleMouseClick = (event) => {
+    chase = !chase; 
+}
+document.addEventListener('mousedown', handleMouseClick); 
+
 // Stolen from stackoverflow
 const getTopN = (arr, n = 10) => {
     const _arr = arr.map((value, index) => [value, index]);
@@ -74,16 +80,18 @@ const BOID_WIDTH = 3;
 class BoidManager{
     constructor(
             n, w,h, 
-            max_speed=5,
-            r1_force=0.0005, 
-            r2_dist=10, r2_force=1, 
+            max_speed=3,
+            r1_force=0.002, 
+            r2_dist=5, r2_force=1, 
             r3_force=0.1,
-            mouse_force=0.1
+            mouse_force=1,
+            fov=100
         ) {
 
         this.w = w; 
         this.h = h; 
         this.max_speed = max_speed;
+        this.fov = fov; 
 
         this.boids = []
         for (let i=0; i<n; i++) {
@@ -113,42 +121,72 @@ class BoidManager{
         this.boids.map( (boid) => boid.draw(ctx) );
         
         // Draw mouse 
-        ctx.beginPath();
-        ctx.arc(MOUSE_X, MOUSE_Y, this.obj_size, 0, 2 * Math.PI);
-        ctx.stroke();
+        if (chase) {
+            ctx.beginPath();
+            ctx.arc(MOUSE_X, MOUSE_Y, this.obj_size, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
     }
 
 
     update() {
         this.boids.map( (boid) => boid.update() );
 
-        this.r1(); 
-        this.r2();
-        this.r3(); 
-        this.avoid(); 
+        this.rules(); 
+        if (chase) {this.avoid();} 
     }
 
-    r1() { 
-        // Boids fly to center of mass of all (neighboring) boids
-        // For now, let all boids be neighbors of all other boids
-        let cx = 0; let cy = 0;
-        this.boids.map( (other) => { 
-            cx += other.s[0]; 
-            cy += other.s[1];  
-        }); 
+    rules() {
+        // First need to see which birds are within range of which other birds
+        // and update their neighbor info 
+        // Can do in Omega(n(n+1) / 2)
+        let adj = []
+        for (let i=0; i<this.boids.length; i++) {
+            // Reset neighbor info
+            this.boids[i].cs = [0,0]
+            this.boids[i].cv = [0,0]
+            this.boids[i].n = 0; 
+        }
 
         for (let i=0; i<this.boids.length; i++) {
-            let boid = this.boids[i]
+            let b1 = this.boids[i]; 
 
-            // Want to exclude boid's own position from center
-            let b_cx = scalar_wrapped_distance(boid.s[0], cx, this.w); 
-            let b_cy = scalar_wrapped_distance(boid.s[1], cy, this.h);
-            
-            // Add direction to velocity
-            boid.a[0] = scalar_wrapped_distance(boid.s[0], b_cx / (this.n-1), this.w) * this.r1_force; 
-            boid.a[1] = scalar_wrapped_distance(boid.s[1], b_cy/ (this.n-1), this.h) * this.r1_force; 
+            for (let j=i+1; j<this.boids.length; j++) {
+                let b2 = this.boids[j]; 
+                let dist = wrapped_distance(b2.s, b1.s, this.w, this.h)
+                if (Math.abs(dist) <= this.fov ) {
+                    // Accumulate info for r1/r3
+                    b1.cs[0] += b2.s[0]; b1.cs[1] += b2.s[1]; 
+                    b1.vs[0] += b2.v[0]; b1.vs[1] += b2.v[1]; 
+                    b1.n += 1;
+
+                    b2.cs[0] += b1.s[0]; b2.cs[1] += b1.s[1]; 
+                    b2.vs[0] += b1.v[0]; b2.vs[1] += b1.v[1]; 
+                    b2.n += 1;
+
+                    // Repell if too close (Rule 2)
+                    if (Math.abs(dist) < this.r2_dist) {
+                        let dx = scalar_wrapped_distance(b2.s[0], b1.s[0], this.w);
+                        let dy = scalar_wrapped_distance(b2.s[1], b1.s[1], this.h);
+
+                        dx *= (this.r2_dist / dist) * this.r2_force; 
+                        dy *= (this.r2_dist / dist) * this.r2_force;; 
+
+                        b1.a[0] += dx; b2.a[0] += -dx; 
+                        b1.a[1] += dy; b2.a[1] += -dy; 
+                    } // */ 
+                }
+            }
+             // Apply rules 1 and 3 now that we have global data
+            // R1: 
+            b1.a[0] += scalar_wrapped_distance(b1.s[0], b1.cs[0] / b1.n, this.w) * this.r1_force; 
+            b1.a[1] += scalar_wrapped_distance(b1.s[1], b1.cs[1] / b1.n, this.h) * this.r1_force; 
+
+            // R3: 
+            b1.a[0] += -(b1.v[0] - b1.cv[0] / b1.n) * this.r3_force; 
+            b1.a[1] += -(b1.v[1] - b1.cv[0] / b1.n) * this.r3_force;
         }
-        
+        //this.r2(); 
     }
 
     r2() {
@@ -162,32 +200,12 @@ class BoidManager{
                 if (main_b != other_b) {
                     let dist = wrapped_distance(main_b.s, other_b.s, this.w, this.h); 
 
-                    if (dist < this.r2_dist) {
-                        main_b.a[0] += scalar_wrapped_distance(other_b.s[0], main_b.s[0], this.w) * (1/dist) * this.r2_force;
-                        main_b.a[1] += scalar_wrapped_distance(other_b.s[1], main_b.s[1], this.h) * (1/dist) * this.r2_force;  
+                    if (Math.abs(dist) < this.r2_dist) {
+                        main_b.a[0] += scalar_wrapped_distance(other_b.s[0], main_b.s[0], this.w) * (this.r2_dist/dist) * this.r2_force;
+                        main_b.a[1] += scalar_wrapped_distance(other_b.s[1], main_b.s[1], this.h) * (this.r2_dist/dist) * this.r2_force;  
                     }
                 }
             }
-        }
-    }
-
-    r3() {
-        let cvx = 0; let cvy = 0; 
-        this.boids.map( (other) => { 
-            cvx += other.v[0]; 
-            cvy += other.v[1] 
-        }); 
-
-        for (let i=0; i<this.boids.length; i++) {
-            let boid = this.boids[i]    
-
-            // Want to exclude boid's own position from center
-            let b_cx = (cvx - boid.v[0]) / (this.n - 1); 
-            let b_cy = (cvy - boid.v[1]) / (this.n - 1);
-            
-            // Add direction to velocity
-            boid.a[0] += -(boid.v[0] - b_cx) * this.r1_force; 
-            boid.a[1] += -(boid.v[1] - b_cy) * this.r1_force; 
         }
     }
 
@@ -214,6 +232,11 @@ class Boid {
             2*(max_speed*Math.random())-max_speed, 
             2*(max_speed*Math.random())-max_speed
         ]; 
+
+        // Neighbor info
+        this.cs = [0,0];
+        this.vs = [0,0]; 
+        this.n = 0; 
 
         this.a = [0,0];  
 
