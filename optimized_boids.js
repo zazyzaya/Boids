@@ -81,7 +81,7 @@ class BoidManager{
     constructor(
             n, w,h, 
             max_speed=3,
-            r1_force=0.002, 
+            r1_force=0.005, 
             r2_dist=5, r2_force=1, 
             r3_force=0.1,
             mouse_force=1,
