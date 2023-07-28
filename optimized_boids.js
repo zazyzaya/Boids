@@ -23,20 +23,11 @@ let handleMousemove = (event) => {
 }
 document.addEventListener('mousemove', handleMousemove);
 
-let chase = false
+let predator = false;
 let handleMouseClick = (event) => {
-    chase = !chase; 
+    predator = !predator; 
 }
 document.addEventListener('mousedown', handleMouseClick); 
-
-// Stolen from stackoverflow
-const getTopN = (arr, n = 10) => {
-    const _arr = arr.map((value, index) => [value, index]);
-    // by using b[0] - a[0] instead of a[0] - b[0] we can get the array in non-increasing order
-    _arr.sort((a, b) => b[0] - a[0]) 
-    return _arr.slice(0, n).map(([_, index]) => index);
-  }
-  
 
 function scalar_wrapped_distance(x1, x2, w) {
     if (Math.abs(x1-x2) > w/2) {
@@ -76,15 +67,24 @@ function generateColor() {
     return finalHexString;
   }
 
+function tuple_to_color(c) {
+    s = '#'; 
+    for (let i=0; i<3; i++) {
+        s += c[i].toString(16); 
+    }
+    return s; 
+}
+
 class BoidManager{
     constructor(
             n, w,h, 
-            max_speed=3,
-            r1_force=0.1, 
-            r2_dist=5, r2_force=1, 
-            r3_force=0.01,
-            mouse_force=1,
-            fov=100
+            max_speed=2,
+            r1_force=0.02, 
+            r2_dist=2, r2_force=1, 
+            r3_force=0.1,
+            mouse_force=100,
+            food_force=10,
+            fov=500
         ) {
 
         this.w = w; 
@@ -104,15 +104,13 @@ class BoidManager{
         this.r2_force = r2_force; 
         this.r3_force = r3_force; 
         this.mouse_force = mouse_force;
+        this.food_force = food_force; 
 
         this.obj_size = 25;
-        this.ob_params = [Math.random(), Math.random()]; 
-        
-        let ts = Date.now() / 2000; 
-        this.obstacle = [
-            this.w / 2, this.h / 2
-        ]
-        this.obstacle_v = [0,0]
+        this.obstacle = [this.w / 2, this.h / 2];
+        this.obstacle_v = [0,0];
+
+        this.foods = []; 
     }
 
     draw(ctx) {
@@ -121,19 +119,37 @@ class BoidManager{
         this.boids.map( (boid) => boid.draw(ctx) );
         
         // Draw mouse 
-        if (chase) {
+        if (predator) {
+            ctx.save(); 
+
             ctx.beginPath();
             ctx.arc(MOUSE_X, MOUSE_Y, this.obj_size, 0, 2 * Math.PI);
             ctx.stroke();
+
+            ctx.restore(); 
         }
+
+        this.foods.map( (food) => {
+            ctx.save()
+
+            ctx.beginPath();
+            ctx.arc(food.s[0], food.s[1], food.size, 0, 2 * Math.PI);
+            ctx.fillStyle = tuple_to_color(food.color); 
+            ctx.fill();
+
+            ctx.restore()
+        }); 
     }
 
+    
 
     update() {
         this.boids.map( (boid) => boid.update() );
 
         this.rules(); 
-        if (chase) {this.avoid(); } 
+
+        if (predator) {this.avoid(); } 
+        this.foods.map( (f) => { f.update(); } )
     }
 
     rules() {
@@ -187,27 +203,25 @@ class BoidManager{
                 b1.a[0] += -(b1.v[0] - b1.cv[0] / b1.n) * this.r3_force; 
                 b1.a[1] += -(b1.v[1] - b1.cv[0] / b1.n) * this.r3_force;
             }
-        }
-        //this.r2(); 
-    }
 
-    r2() {
-        // Repell birds that are too close 
-        for (let i=0; i<this.boids.length; i++) {
-            let main_b = this.boids[i]; 
-
-            for (let j=0; j<this.boids.length; j++) {
-                let other_b = this.boids[j];
-
-                if (main_b != other_b) {
-                    let dist = wrapped_distance(main_b.s, other_b.s, this.w, this.h); 
-
-                    if (Math.abs(dist) < this.r2_dist) {
-                        main_b.a[0] += scalar_wrapped_distance(other_b.s[0], main_b.s[0], this.w) * (this.r2_dist/dist) * this.r2_force;
-                        main_b.a[1] += scalar_wrapped_distance(other_b.s[1], main_b.s[1], this.h) * (this.r2_dist/dist) * this.r2_force;  
-                    }
+            // Find closest food (if it exists) and run to it
+            let min_dist = Math.max(this.w, this.h); 
+            let min_idx = -1; 
+            for (let j=0; j<this.foods.length; j++) {
+                let dist = Math.abs(wrapped_distance(b1.s, this.foods[j].s, this.w, this.h)); 
+                if (dist < min_dist) {
+                    min_dist = dist; 
+                    min_idx = j; 
                 }
             }
+
+            if (min_dist < this.fov*2) {
+                let f = this.boids[min_idx]; 
+                b1.a[0] -= scalar_wrapped_distance(f.s[0], b1.s[0], this.w) * ((this.fov * this.food_force)/min_dist); 
+                b1.a[1] -= scalar_wrapped_distance(f.s[1], b1.s[1], this.h) * ((this.fov * this.food_force)/min_dist);
+            }
+
+
         }
     }
 
@@ -215,11 +229,60 @@ class BoidManager{
         // Repell birds from mouse
         for (let i=0; i<this.boids.length; i++) {
             let main_b = this.boids[i];     
-            let dist = wrapped_distance(main_b.s, [MOUSE_X, MOUSE_Y], this.w, this.h); 
+            let dist = Math.abs(wrapped_distance(main_b.s, [MOUSE_X, MOUSE_Y], this.w, this.h)); 
 
-            main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * (this.fov/dist) * this.mouse_force;
-            main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * (this.fov/dist) * this.mouse_force; 
+            if (dist < this.fov*2) {
+                main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * ((this.fov * this.mouse_force)/dist); 
+                main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * ((this.fov * this.mouse_force)/dist);
+            }
         }
+    }
+}
+
+function rand_neg() {
+    if (Math.random() > 0.5) {
+        return 1; 
+    } return -1; 
+}
+class Food {
+    constructor(size, h_speed, v_speed, w, h) {
+        this.size = size; 
+        this.t0 = Math.random() * 2 * Math.PI;
+        this.t = 0;  
+        this.h_speed = h_speed * rand_neg(); 
+        this.v_speed = v_speed * rand_neg(); 
+
+        this.w = w; this.h = h; 
+
+        this.s = [this.w, this.h / 2];
+        this.color = [
+            parseInt(256 * Math.random()), 
+            parseInt(256 * Math.random()),
+            parseInt(256 * Math.random())
+        ]
+        this.color_direction = [rand_neg(), rand_neg(), rand_neg()]
+    }
+
+    update() {
+        // Food color warps around 
+        for (let i=0; i<3; i++){
+            this.color[i] += this.color_direction[i];
+            if (this.color[i] <=50 || this.color[i] >= 255) {
+                this.color_direction[i] *= -1
+            }
+        } // */
+
+        // Food moves in sin wave 
+        this.s[0] += this.h_speed; 
+
+        let h = Math.sin(this.t + this.t0);
+        this.s[1] = this.t*this.v_speed + ((1+h) * this.h) / 2
+        this.t += 0.01
+
+        while (this.s[0] > this.w) { this.s[0] -= this.w}
+        while (this.s[1] > this.h) { this.s[1] -= this.h}
+        while (this.s[0] < 0) { this.s[0] += this.w }
+        while (this.s[1] < 0) { this.s[1] += this.h }
     }
 }
 
