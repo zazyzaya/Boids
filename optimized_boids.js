@@ -75,16 +75,24 @@ function tuple_to_color(c) {
     return s; 
 }
 
+function mod(x,y) {
+    let remainder = x % y; 
+    if (remainder < 0) {
+        return y+remainder; 
+    }
+    return remainder;
+}
+
 class BoidManager{
     constructor(
             n, w,h, 
-            max_speed=2,
-            r1_force=0.02, 
-            r2_dist=2, r2_force=1, 
-            r3_force=0.1,
-            mouse_force=100,
-            food_force=10,
-            fov=500
+            max_speed=3,
+            r1_force=0.005, 
+            r2_dist=10, r2_force=0.05, 
+            r3_force=0.05,
+            mouse_force=0.2,
+            food_force=0.01,
+            fov=100
         ) {
 
         this.w = w; 
@@ -156,7 +164,6 @@ class BoidManager{
         // First need to see which birds are within range of which other birds
         // and update their neighbor info 
         // Can do in Omega(n(n+1) / 2)
-        let adj = []
         for (let i=0; i<this.boids.length; i++) {
             // Reset neighbor info
             this.boids[i].cs = [0,0]
@@ -208,17 +215,17 @@ class BoidManager{
             let min_dist = Math.max(this.w, this.h); 
             let min_idx = -1; 
             for (let j=0; j<this.foods.length; j++) {
-                let dist = Math.abs(wrapped_distance(b1.s, this.foods[j].s, this.w, this.h)); 
+                let dist = Math.abs(wrapped_distance(this.foods[j].s, b1.s, this.w, this.h)); 
                 if (dist < min_dist) {
                     min_dist = dist; 
                     min_idx = j; 
                 }
             }
 
-            if (min_dist < this.fov*2) {
-                let f = this.boids[min_idx]; 
-                b1.a[0] -= scalar_wrapped_distance(f.s[0], b1.s[0], this.w) * ((this.fov * this.food_force)/min_dist); 
-                b1.a[1] -= scalar_wrapped_distance(f.s[1], b1.s[1], this.h) * ((this.fov * this.food_force)/min_dist);
+            if ((min_dist < this.fov*4) && (min_idx >= 0)) {
+                let f = this.foods[min_idx]; 
+                b1.a[0] -= scalar_wrapped_distance(f.s[0], b1.s[0], this.w) * this.food_force; 
+                b1.a[1] -= scalar_wrapped_distance(f.s[1], b1.s[1], this.h) * this.food_force;
             }
 
 
@@ -231,7 +238,7 @@ class BoidManager{
             let main_b = this.boids[i];     
             let dist = Math.abs(wrapped_distance(main_b.s, [MOUSE_X, MOUSE_Y], this.w, this.h)); 
 
-            if (dist < this.fov*2) {
+            if (dist < this.fov) {
                 main_b.a[0] += scalar_wrapped_distance(MOUSE_X, main_b.s[0], this.w) * ((this.fov * this.mouse_force)/dist); 
                 main_b.a[1] += scalar_wrapped_distance(MOUSE_Y, main_b.s[1], this.h) * ((this.fov * this.mouse_force)/dist);
             }
@@ -279,10 +286,8 @@ class Food {
         this.s[1] = this.t*this.v_speed + ((1+h) * this.h) / 2
         this.t += 0.01
 
-        while (this.s[0] > this.w) { this.s[0] -= this.w}
-        while (this.s[1] > this.h) { this.s[1] -= this.h}
-        while (this.s[0] < 0) { this.s[0] += this.w }
-        while (this.s[1] < 0) { this.s[1] += this.h }
+        this.s[0] = mod(this.s[0], this.w); 
+        this.s[1] = mod(this.s[1], this.h);
     }
 }
 
@@ -338,10 +343,10 @@ class Boid {
     }
 
     update() {
-        // Cap speed at max
         this.v[0] += this.a[0];
         this.v[1] += this.a[1]; 
 
+        // Cap speed at max
         let mag = magnitude(this.v); 
         if (mag > this.max_speed) {
             this.v = normalize(this.v); 
@@ -352,13 +357,16 @@ class Boid {
         let x = this.s[0] + this.v[0];
         let y = this.s[1] + this.v[1]; 
         
-        // Loop around if need be 
-        while (x > this.w) { x = x - this.w; }
-        while (y > this.h) { y = y - this.h; }
-
-        while (x < 0) { x=this.w + x; }
-        while (y < 0) { y=this.h + y; }
+        // Loop around if need be
+        x = mod(x, this.w); 
+        y = mod(y, this.h); 
         
         this.s = [x,y]
+        
+        // This is what's causing the problem. 
+        // If I don't reset it, it get's too high and the birds 
+        // don't change direction since no force is being applied to them 
+        // If I reset it, they clump up and don't know what to do 
+        this.a = [0,0]; 
     }
 }
